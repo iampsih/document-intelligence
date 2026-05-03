@@ -11,12 +11,26 @@ from app.infrastructure.search.elasticsearch_client import INDEX_NAME, es
 from app.infrastructure.vector.embedding import get_embedding
 from app.infrastructure.vector.qdrant_service import client, COLLECTION_NAME
 from qdrant_client.models import PointStruct
+from app.infrastructure.parser.pdf_parser import extract_text_from_pdf
+import tempfile
+from app.infrastructure.storage.s3_client import s3_client, BUCKET_NAME
 
 KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"
 TOPIC = "documents"
 
 DATABASE_URL = "postgresql+asyncpg://aml_user:aml_pass@localhost:5434/aml_db"
 
+def download_file_from_s3(storage_key: str) -> str:
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+
+    s3_client.download_fileobj(
+        BUCKET_NAME,
+        storage_key,
+        temp_file,
+    )
+
+    temp_file.close()
+    return temp_file.name
 
 async def main():
     consumer = AIOKafkaConsumer(
@@ -53,11 +67,10 @@ async def main():
                     if data.get("force_error"):
                         raise RuntimeError("Fake OCR error")
 
-                    parsed_text = (
-                        f"cv document file {storage_key}. "
-                        f"This is test document content. "
-                        f"Document ID: {document_id}."
-                    )
+                    file_path = download_file_from_s3(storage_key)
+                    parsed_text = extract_text_from_pdf(file_path)
+                    if not parsed_text:
+                        parsed_text = "No text extracted from PDF"
 
                     vector = get_embedding(parsed_text)
 
