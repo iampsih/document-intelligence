@@ -9,11 +9,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.broker.kafka_producer import send_message
-from app.infrastructure.broker.kafka_producer import KafkaProducer
 from app.infrastructure.db.models import Document
 from app.infrastructure.db.repositories import DocumentRepository
 from app.infrastructure.db.session import get_db
 from app.presentation.api.schemas import DocumentCreateRequest, DocumentResponse
+from app.infrastructure.search.elasticsearch_client import es, INDEX_NAME
 
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
 
@@ -51,6 +51,29 @@ async def create_document(
 
     return document
 
+@router.get("/search")
+async def search_documents(q: str):
+    response = es.search(
+        index=INDEX_NAME,
+        query={
+            "bool": {
+                "should": [
+                    {"wildcard": {"text.keyword": f"*{q}*"}},
+                    {"wildcard": {"filename.keyword": f"*{q}*"}},
+                ]
+            }
+        },
+    )
+
+    hits = response["hits"]["hits"]
+
+    return [
+        {
+            "document_id": hit["_source"]["document_id"],
+            "text": hit["_source"]["text"],
+        }
+        for hit in hits
+    ]
 
 @router.get("/{document_id}", response_model=DocumentResponse)
 async def get_document(

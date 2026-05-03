@@ -7,6 +7,7 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.infrastructure.db.models import Document
+from app.infrastructure.search.elasticsearch_client import INDEX_NAME, es
 
 KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"
 TOPIC = "documents"
@@ -31,6 +32,7 @@ async def main():
         async for msg in consumer:
             data = json.loads(msg.value.decode("utf-8"))
             document_id = uuid.UUID(data["document_id"])
+            storage_key = data["storage_key"]
 
             print(f"Получили задачу: {document_id}")
 
@@ -48,10 +50,34 @@ async def main():
                     if data.get("force_error"):
                         raise RuntimeError("Fake OCR error")
 
+                    parsed_text = (
+                        f"cv document file {storage_key}. "
+                        f"This is test document content. "
+                        f"Document ID: {document_id}."
+                    )
+
+                    print("→ Отправляем в Elasticsearch")
+
+                    response = es.index(
+                        index=INDEX_NAME,
+                        id=str(document_id),
+                        document={
+                            "document_id": str(document_id),
+                            "filename": storage_key,
+                            "text": parsed_text,
+                        }
+                    )
+
+                    print("→ Ответ Elasticsearch:", response)
+
                     await session.execute(
                         update(Document)
                         .where(Document.id == document_id)
-                        .values(status="processed", error_message=None)
+                        .values(
+                            status="processed",
+                            text_content=parsed_text,
+                            error_message=None,
+                        )
                     )
                     await session.commit()
 
