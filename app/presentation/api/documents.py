@@ -14,6 +14,9 @@ from app.infrastructure.db.repositories import DocumentRepository
 from app.infrastructure.db.session import get_db
 from app.presentation.api.schemas import DocumentCreateRequest, DocumentResponse
 from app.infrastructure.search.elasticsearch_client import es, INDEX_NAME
+from app.infrastructure.vector.embedding import get_embedding
+from app.infrastructure.vector.qdrant_service import client as qdrant_client
+from app.infrastructure.vector.qdrant_service import COLLECTION_NAME as QDRANT_COLLECTION_NAME
 
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
 
@@ -73,6 +76,25 @@ async def search_documents(q: str):
             "text": hit["_source"]["text"],
         }
         for hit in hits
+    ]
+
+@router.get("/semantic-search")
+async def semantic_search_documents(q: str):
+    query_vector = get_embedding(q)
+
+    results = qdrant_client.query_points(
+        collection_name=QDRANT_COLLECTION_NAME,
+        query=query_vector,
+        limit=5,
+    )
+
+    return [
+        {
+            "document_id": result.payload["document_id"],
+            "score": result.score,
+            "text": result.payload["text"],
+        }
+        for result in results.points
     ]
 
 @router.get("/{document_id}", response_model=DocumentResponse)

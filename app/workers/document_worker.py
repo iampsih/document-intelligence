@@ -8,6 +8,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.infrastructure.db.models import Document
 from app.infrastructure.search.elasticsearch_client import INDEX_NAME, es
+from app.infrastructure.vector.embedding import get_embedding
+from app.infrastructure.vector.qdrant_service import client, COLLECTION_NAME
+from qdrant_client.models import PointStruct
 
 KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"
 TOPIC = "documents"
@@ -54,6 +57,22 @@ async def main():
                         f"cv document file {storage_key}. "
                         f"This is test document content. "
                         f"Document ID: {document_id}."
+                    )
+
+                    vector = get_embedding(parsed_text)
+
+                    client.upsert(
+                        collection_name=COLLECTION_NAME,
+                        points=[
+                            PointStruct(
+                                id=str(document_id),
+                                vector=vector,
+                                payload={
+                                    "document_id": str(document_id),
+                                    "text": parsed_text,
+                                },
+                            )
+                        ],
                     )
 
                     print("→ Отправляем в Elasticsearch")
