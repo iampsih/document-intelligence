@@ -26,3 +26,5 @@ class Document(Base):
     status: Mapped[str] = mapped_column(String, nullable=False)
 
     text_content: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
