@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: aml_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: aml_user
+      POSTGRES_PASSWORD: aml_pass
+      POSTGRES_DB: aml_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
